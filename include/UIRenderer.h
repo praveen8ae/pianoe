@@ -1,30 +1,29 @@
 #pragma once
 
 #include "Piano.h"
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
+#include <SDL2/SDL.h>
 #include <memory>
 #include <string>
 
 /**
  * @class UIRenderer
- * @brief Handles all rendering using X11 graphics
+ * @brief Handles all rendering using SDL2 graphics (cross-platform)
  */
 class UIRenderer {
 public:
     struct Color {
-        unsigned short r, g, b;
+        uint8_t r, g, b;
         
-        Color(unsigned short r = 0, unsigned short g = 0, unsigned short b = 0)
+        Color(uint8_t r = 0, uint8_t g = 0, uint8_t b = 0)
             : r(r), g(g), b(b) {}
         
-        static Color White() { return Color(65535, 65535, 65535); }
+        static Color White() { return Color(255, 255, 255); }
         static Color Black() { return Color(0, 0, 0); }
-        static Color Gray() { return Color(32768, 32768, 32768); }
-        static Color DarkGray() { return Color(16384, 16384, 16384); }
-        static Color Red() { return Color(65535, 0, 0); }
-        static Color Blue() { return Color(0, 0, 65535); }
-        static Color Green() { return Color(0, 65535, 0); }
+        static Color Gray() { return Color(128, 128, 128); }
+        static Color DarkGray() { return Color(64, 64, 64); }
+        static Color Red() { return Color(255, 0, 0); }
+        static Color Blue() { return Color(0, 0, 255); }
+        static Color Green() { return Color(0, 255, 0); }
     };
     
     UIRenderer(int windowWidth, int windowHeight, const std::string& title);
@@ -32,8 +31,8 @@ public:
     
     // Window management
     bool isWindowOpen() const;
-    Window getWindow() const { return window_; }
-    Display* getDisplay() const { return display_; }
+    SDL_Window* getWindow() const { return window_; }
+    SDL_Renderer* getRenderer() const { return renderer_; }
     
     // Rendering
     void clear();
@@ -60,22 +59,13 @@ public:
     void renderRecordingStatus(bool isRecording, double duration);
     
 private:
-    Display* display_;
-    Window window_;
-    GC gc_;  // Graphics Context
-    Colormap colormap_;
-    XColor* colors_;
+    SDL_Window* window_;
+    SDL_Renderer* renderer_;
     
     int windowWidth_;
     int windowHeight_;
-    int screenNumber_;
     
-    // Font support
-    XFontStruct* font_;
-    
-    // Color mapping
-    unsigned long allocateColor(const Color& color);
-    unsigned long getXColor(const Color& color);
-    
-    void setupGraphics();
+    // Helper methods
+    void renderSDLColor(const Color& color);
 };
+

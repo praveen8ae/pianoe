@@ -3,91 +3,64 @@
 #include <cstring>
 
 UIRenderer::UIRenderer(int windowWidth, int windowHeight, const std::string& title)
-    : windowWidth_(windowWidth), windowHeight_(windowHeight) {
+    : windowWidth_(windowWidth), windowHeight_(windowHeight), window_(nullptr), renderer_(nullptr) {
     
-    display_ = XOpenDisplay(nullptr);
-    if (!display_) {
-        throw std::runtime_error("Failed to open X11 display");
+    // Initialize SDL
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        throw std::runtime_error(std::string("SDL initialization failed: ") + SDL_GetError());
     }
     
-    screenNumber_ = DefaultScreen(display_);
-    Window rootWindow = RootWindow(display_, screenNumber_);
-    
     // Create window
-    XSetWindowAttributes attributes;
-    attributes.background_pixel = WhitePixel(display_, screenNumber_);
-    attributes.event_mask = ExposureMask | KeyPressMask | KeyReleaseMask | 
-                            ButtonPressMask | ButtonReleaseMask | PointerMotionMask;
-    
-    window_ = XCreateWindow(
-        display_, rootWindow,
-        0, 0, windowWidth_, windowHeight_, 0,
-        DefaultDepth(display_, screenNumber_),
-        InputOutput,
-        DefaultVisual(display_, screenNumber_),
-        CWBackPixel | CWEventMask,
-        &attributes
+    window_ = SDL_CreateWindow(
+        title.c_str(),
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        windowWidth_,
+        windowHeight_,
+        SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
     
     if (!window_) {
-        throw std::runtime_error("Failed to create X11 window");
+        SDL_Quit();
+        throw std::runtime_error(std::string("Failed to create SDL window: ") + SDL_GetError());
     }
     
-    // Set window properties
-    XStoreName(display_, window_, title.c_str());
+    // Create renderer
+    renderer_ = SDL_CreateRenderer(
+        window_,
+        -1,
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+    );
     
-    // Create graphics context
-    gc_ = XCreateGC(display_, window_, 0, nullptr);
-    if (!gc_) {
-        throw std::runtime_error("Failed to create graphics context");
+    if (!renderer_) {
+        SDL_DestroyWindow(window_);
+        SDL_Quit();
+        throw std::runtime_error(std::string("Failed to create SDL renderer: ") + SDL_GetError());
     }
     
-    // Setup colors
-    colormap_ = DefaultColormap(display_, screenNumber_);
-    colors_ = new XColor[256];
-    
-    // Load font
-    font_ = XLoadQueryFont(display_, "-*-helvetica-medium-r-*-*-12-*-*-*-*-*-iso8859-1");
-    if (!font_) {
-        font_ = XLoadQueryFont(display_, "fixed");
-    }
-    if (font_) {
-        XSetFont(display_, gc_, font_->fid);
-    }
-    
-    // Map window
-    XMapWindow(display_, window_);
-    
-    // Flush and process events
-    XFlush(display_);
-    XSync(display_, False);
+    // Set render draw color to white
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+    SDL_RenderClear(renderer_);
+    SDL_RenderPresent(renderer_);
 }
 
 UIRenderer::~UIRenderer() {
-    if (font_) {
-        XFreeFont(display_, font_);
-    }
-    if (gc_) {
-        XFreeGC(display_, gc_);
+    if (renderer_) {
+        SDL_DestroyRenderer(renderer_);
     }
     if (window_) {
-        XDestroyWindow(display_, window_);
+        SDL_DestroyWindow(window_);
     }
-    if (colors_) {
-        delete[] colors_;
-    }
-    if (display_) {
-        XCloseDisplay(display_);
-    }
+    SDL_Quit();
 }
 
 bool UIRenderer::isWindowOpen() const {
-    return window_ != 0 && display_ != nullptr;
+    return window_ != nullptr && renderer_ != nullptr;
 }
 
 void UIRenderer::clear() {
-    XSetForeground(display_, gc_, WhitePixel(display_, screenNumber_));
-    XFillRectangle(display_, window_, gc_, 0, 0, windowWidth_, windowHeight_);
+    SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);
+    SDL_RenderClear(renderer_);
 }
 
 void UIRenderer::renderPiano(const Piano& piano) {
@@ -116,89 +89,77 @@ void UIRenderer::drawKey(const PianoKey& key) {
     Color borderColor = Color::Black();
     Color pressedColor = Color::Gray();
     
-    // Draw key
+    // Draw key background
     if (key.isPressed()) {
-        XSetForeground(display_, gc_, allocateColor(pressedColor));
+        renderSDLColor(pressedColor);
     } else {
-        XSetForeground(display_, gc_, allocateColor(keyColor));
+        renderSDLColor(keyColor);
     }
     
-    XFillRectangle(display_, window_, gc_, x, y, w, h);
+    SDL_Rect rect = {x, y, w, h};
+    SDL_RenderFillRect(renderer_, &rect);
     
     // Draw border
-    XSetForeground(display_, gc_, allocateColor(borderColor));
-    XSetLineAttributes(display_, gc_, 2, LineSolid, CapButt, JoinBevel);
-    XDrawRectangle(display_, window_, gc_, x, y, w, h);
+    renderSDLColor(borderColor);
+    SDL_RenderDrawRect(renderer_, &rect);
     
-    // Draw note label (simplified)
-    if (key.getColor() == PianoKey::KeyColor::White && font_) {
+    // Draw note label (simplified - text rendering would need SDL_ttf)
+    if (key.getColor() == PianoKey::KeyColor::White) {
         std::string label = key.getNote().getLabel();
-        int textX = x + w / 2 - label.length() * 3;
-        int textY = y + h - 10;
-        
-        XSetForeground(display_, gc_, allocateColor(Color::Black()));
-        XDrawString(display_, window_, gc_, textX, textY, label.c_str(), label.length());
+        // Text rendering would require SDL_ttf library
+        // For now, we'll skip text rendering to keep it simple
     }
 }
 
 void UIRenderer::renderText(int x, int y, const std::string& text, Color color) {
-    if (!font_) return;
-    
-    XSetForeground(display_, gc_, allocateColor(color));
-    XDrawString(display_, window_, gc_, x, y, text.c_str(), text.length());
+    // Text rendering with SDL requires SDL_ttf library
+    // For now, this is a placeholder
+    // To implement: load font with TTF_OpenFont and render with TTF_RenderText_Solid
 }
 
 void UIRenderer::renderRectangle(int x, int y, int width, int height, Color color, bool filled) {
-    XSetForeground(display_, gc_, allocateColor(color));
+    renderSDLColor(color);
     
+    SDL_Rect rect = {x, y, width, height};
     if (filled) {
-        XFillRectangle(display_, window_, gc_, x, y, width, height);
+        SDL_RenderFillRect(renderer_, &rect);
     } else {
-        XDrawRectangle(display_, window_, gc_, x, y, width, height);
+        SDL_RenderDrawRect(renderer_, &rect);
     }
 }
 
 void UIRenderer::renderCircle(int x, int y, int radius, Color color, bool filled) {
-    XSetForeground(display_, gc_, allocateColor(color));
+    renderSDLColor(color);
     
-    if (filled) {
-        XFillArc(display_, window_, gc_, x - radius, y - radius, radius * 2, radius * 2, 0, 360 * 64);
-    } else {
-        XDrawArc(display_, window_, gc_, x - radius, y - radius, radius * 2, radius * 2, 0, 360 * 64);
+    // SDL doesn't have a native circle drawing, so we'll draw it with lines (simplified)
+    for (int w = 0; w < radius * 2; w++) {
+        for (int h = 0; h < radius * 2; h++) {
+            int dx = radius - w;
+            int dy = radius - h;
+            if ((dx*dx + dy*dy) <= (radius * radius)) {
+                SDL_RenderDrawPoint(renderer_, x + dx, y + dy);
+            }
+        }
     }
 }
 
 void UIRenderer::drawLine(int x1, int y1, int x2, int y2, Color color) {
-    XSetForeground(display_, gc_, allocateColor(color));
-    XDrawLine(display_, window_, gc_, x1, y1, x2, y2);
+    renderSDLColor(color);
+    SDL_RenderDrawLine(renderer_, x1, y1, x2, y2);
 }
 
 void UIRenderer::flush() {
-    XFlush(display_);
+    SDL_RenderPresent(renderer_);
 }
 
 void UIRenderer::setWindowSize(int width, int height) {
     windowWidth_ = width;
     windowHeight_ = height;
-    XResizeWindow(display_, window_, width, height);
+    SDL_SetWindowSize(window_, width, height);
 }
 
-unsigned long UIRenderer::allocateColor(const Color& color) {
-    XColor col;
-    col.red = color.r;
-    col.green = color.g;
-    col.blue = color.b;
-    col.flags = DoRed | DoGreen | DoBlue;
-    
-    if (XAllocColor(display_, colormap_, &col)) {
-        return col.pixel;
-    }
-    
-    return WhitePixel(display_, screenNumber_);
-}
-
-unsigned long UIRenderer::getXColor(const Color& color) {
-    return allocateColor(color);
+void UIRenderer::renderSDLColor(const Color& color) {
+    SDL_SetRenderDrawColor(renderer_, color.r, color.g, color.b, 255);
 }
 
 PianoKey* UIRenderer::getKeyAt(int x, int y, const Piano& piano) {
@@ -212,15 +173,11 @@ PianoKey* UIRenderer::getKeyAt(int x, int y, const Piano& piano) {
 }
 
 void UIRenderer::renderStatus(const std::string& status) {
-    if (!font_) return;
-    
-    int statusY = windowHeight_ - 20;
-    XSetForeground(display_, gc_, allocateColor(Color::Black()));
-    XDrawString(display_, window_, gc_, 10, statusY, status.c_str(), status.length());
+    // Status rendering would require SDL_ttf for text
+    // For now, this is a placeholder
 }
 
 void UIRenderer::renderRecordingStatus(bool isRecording, double duration) {
-    std::string text = isRecording ? "● Recording: " : "○ Ready";
-    text += std::to_string(static_cast<int>(duration)) + "s";
-    renderStatus(text);
+    // Recording status rendering would require SDL_ttf for text
+    // For now, this is a placeholder
 }

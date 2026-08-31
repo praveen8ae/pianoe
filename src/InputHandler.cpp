@@ -1,6 +1,4 @@
 #include "InputHandler.h"
-#include <X11/Xlib.h>
-#include <X11/keysym.h>
 #include <set>
 
 InputHandler::InputHandler(Piano* piano)
@@ -11,89 +9,83 @@ InputHandler::InputHandler(Piano* piano)
 InputHandler::~InputHandler() = default;
 
 void InputHandler::setupDefaultKeyboardMap() {
-    // Row 1: C through B (lower octave)
-    mapKeyToNote(XK_a, Note::NoteName::C, 4);
-    mapKeyToNote(XK_w, Note::NoteName::CSharp, 4);
-    mapKeyToNote(XK_s, Note::NoteName::D, 4);
-    mapKeyToNote(XK_e, Note::NoteName::DSharp, 4);
-    mapKeyToNote(XK_d, Note::NoteName::E, 4);
-    mapKeyToNote(XK_f, Note::NoteName::F, 4);
-    mapKeyToNote(XK_t, Note::NoteName::FSharp, 4);
-    mapKeyToNote(XK_g, Note::NoteName::G, 4);
-    mapKeyToNote(XK_y, Note::NoteName::GSharp, 4);
-    mapKeyToNote(XK_h, Note::NoteName::A, 4);
-    mapKeyToNote(XK_u, Note::NoteName::ASharp, 4);
-    mapKeyToNote(XK_j, Note::NoteName::B, 4);
+    // Row 1: C through B (lower octave) - QWERTY layout
+    mapKeyToNote(SDLK_a, Note::NoteName::C, 4);
+    mapKeyToNote(SDLK_w, Note::NoteName::CSharp, 4);
+    mapKeyToNote(SDLK_s, Note::NoteName::D, 4);
+    mapKeyToNote(SDLK_e, Note::NoteName::DSharp, 4);
+    mapKeyToNote(SDLK_d, Note::NoteName::E, 4);
+    mapKeyToNote(SDLK_f, Note::NoteName::F, 4);
+    mapKeyToNote(SDLK_t, Note::NoteName::FSharp, 4);
+    mapKeyToNote(SDLK_g, Note::NoteName::G, 4);
+    mapKeyToNote(SDLK_y, Note::NoteName::GSharp, 4);
+    mapKeyToNote(SDLK_h, Note::NoteName::A, 4);
+    mapKeyToNote(SDLK_u, Note::NoteName::ASharp, 4);
+    mapKeyToNote(SDLK_j, Note::NoteName::B, 4);
     
     // Row 2: C through B (higher octave)
-    mapKeyToNote(XK_k, Note::NoteName::C, 5);
-    mapKeyToNote(XK_o, Note::NoteName::CSharp, 5);
-    mapKeyToNote(XK_l, Note::NoteName::D, 5);
+    mapKeyToNote(SDLK_k, Note::NoteName::C, 5);
+    mapKeyToNote(SDLK_o, Note::NoteName::CSharp, 5);
+    mapKeyToNote(SDLK_l, Note::NoteName::D, 5);
 }
 
-void InputHandler::mapKeyToNote(KeySym keySym, Note::NoteName note, int octave) {
-    keyMap_[keySym] = std::make_pair(note, octave);
+void InputHandler::mapKeyToNote(SDL_Keycode keycode, Note::NoteName note, int octave) {
+    keyMap_[keycode] = std::make_pair(note, octave);
 }
 
-Note::NoteName InputHandler::getKeyNote(KeySym keySym) const {
-    auto it = keyMap_.find(keySym);
+Note::NoteName InputHandler::getKeyNote(SDL_Keycode keycode) const {
+    auto it = keyMap_.find(keycode);
     return (it != keyMap_.end()) ? it->second.first : Note::NoteName::C;
 }
 
-int InputHandler::getKeyOctave(KeySym keySym) const {
-    auto it = keyMap_.find(keySym);
+int InputHandler::getKeyOctave(SDL_Keycode keycode) const {
+    auto it = keyMap_.find(keycode);
     return (it != keyMap_.end()) ? it->second.second : 4;
 }
 
-void InputHandler::handleXEvent(XEvent& event) {
+void InputHandler::handleSDLEvent(const SDL_Event& event) {
     switch (event.type) {
-        case 2: { // KeyPress
-            KeySym keySym = XLookupKeysym(&event.xkey, 0);
-            handleKeyPress(keySym);
+        case SDL_KEYDOWN:
+            handleKeyPress(event.key.keysym.sym);
             break;
-        }
-        case 3: { // KeyRelease
-            KeySym keySym = XLookupKeysym(&event.xkey, 0);
-            handleKeyRelease(keySym);
+        case SDL_KEYUP:
+            handleKeyRelease(event.key.keysym.sym);
             break;
-        }
-        case ButtonPress: {
-            handleMouseClick(event.xbutton.x, event.xbutton.y);
+        case SDL_MOUSEBUTTONDOWN:
+            handleMouseClick(event.button.x, event.button.y);
             break;
-        }
-        case ButtonRelease: {
-            handleMouseRelease(event.xbutton.x, event.xbutton.y);
+        case SDL_MOUSEBUTTONUP:
+            handleMouseRelease(event.button.x, event.button.y);
             break;
-        }
         default:
             break;
     }
 }
 
-void InputHandler::handleKeyPress(KeySym keySym) {
+void InputHandler::handleKeyPress(SDL_Keycode keycode) {
     // Check if key already pressed (ignore key repeat)
-    if (pressedKeys_.count(keySym) > 0) {
+    if (pressedKeys_.count(keycode) > 0) {
         return;
     }
     
-    pressedKeys_.insert(keySym);
+    pressedKeys_.insert(keycode);
     
     // Special keys
-    if (keySym == XK_z || keySym == XK_Z) {
+    if (keycode == SDLK_z) {
         // Octave down
         return;
     }
-    if (keySym == XK_x || keySym == XK_X) {
+    if (keycode == SDLK_x) {
         // Octave up
         return;
     }
-    if (keySym == XK_space) {
+    if (keycode == SDLK_SPACE) {
         // Sustain pedal
         return;
     }
     
     // Check if it's a note key
-    auto it = keyMap_.find(keySym);
+    auto it = keyMap_.find(keycode);
     if (it != keyMap_.end()) {
         Note::NoteName note = it->second.first;
         int octave = it->second.second;
@@ -104,17 +96,17 @@ void InputHandler::handleKeyPress(KeySym keySym) {
         if (eventCallback_) {
             InputEvent event;
             event.type = EventType::KeyDown;
-            event.keySym = keySym;
+            event.sdlKeySym.sym = keycode;
             eventCallback_(event, *piano_);
         }
     }
 }
 
-void InputHandler::handleKeyRelease(KeySym keySym) {
-    pressedKeys_.erase(keySym);
+void InputHandler::handleKeyRelease(SDL_Keycode keycode) {
+    pressedKeys_.erase(keycode);
     
     // Check if it's a note key
-    auto it = keyMap_.find(keySym);
+    auto it = keyMap_.find(keycode);
     if (it != keyMap_.end()) {
         Note::NoteName note = it->second.first;
         int octave = it->second.second;
@@ -125,14 +117,13 @@ void InputHandler::handleKeyRelease(KeySym keySym) {
         if (eventCallback_) {
             InputEvent event;
             event.type = EventType::KeyUp;
-            event.keySym = keySym;
+            event.sdlKeySym.sym = keycode;
             eventCallback_(event, *piano_);
         }
     }
 }
 
 void InputHandler::handleMouseClick(int x, int y) {
-    // Find which key was clicked (would need renderer to determine this)
     InputEvent event;
     event.type = EventType::MouseClick;
     event.mouseX = x;

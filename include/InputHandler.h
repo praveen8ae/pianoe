@@ -1,16 +1,15 @@
 #pragma once
 
 #include "Piano.h"
+#include <SDL2/SDL.h>
 #include <functional>
 #include <map>
 #include <set>
 #include <memory>
-#include <X11/Xlib.h>
-#include <X11/keysym.h>
 
 /**
  * @class InputHandler
- * @brief Manages keyboard and mouse input, converts them to piano key presses
+ * @brief Manages keyboard and mouse input, converts them to piano key presses (cross-platform with SDL2)
  */
 class InputHandler {
 public:
@@ -27,7 +26,7 @@ public:
         int keyCode;
         int mouseX;
         int mouseY;
-        KeySym keySym;
+        SDL_Keysym sdlKeySym;
     };
     
     using EventCallback = std::function<void(const InputEvent&, Piano&)>;
@@ -35,8 +34,8 @@ public:
     InputHandler(Piano* piano);
     ~InputHandler();
     
-    // Process X11 events
-    void handleXEvent(XEvent& event);
+    // Process SDL events
+    void handleSDLEvent(const SDL_Event& event);
     
     // Register callback for custom event handling
     void setEventCallback(EventCallback callback) {
@@ -44,26 +43,26 @@ public:
     }
     
     // Get currently active keys (keyboard mapping)
-    Note::NoteName getKeyNote(KeySym keySym) const;
-    int getKeyOctave(KeySym keySym) const;
+    Note::NoteName getKeyNote(SDL_Keycode keycode) const;
+    int getKeyOctave(SDL_Keycode keycode) const;
     
     // Setup keyboard map (customizable)
     void setupDefaultKeyboardMap();
-    void mapKeyToNote(KeySym keySym, Note::NoteName note, int octave);
+    void mapKeyToNote(SDL_Keycode keycode, Note::NoteName note, int octave);
     
 private:
     Piano* piano_;
     EventCallback eventCallback_;
     
-    // Keyboard mapping: key symbol -> (note, octave)
-    std::map<KeySym, std::pair<Note::NoteName, int>> keyMap_;
+    // Keyboard mapping: SDL keycode -> (note, octave)
+    std::map<SDL_Keycode, std::pair<Note::NoteName, int>> keyMap_;
     
     // Track pressed keys to avoid repeats
-    std::set<KeySym> pressedKeys_;
+    std::set<SDL_Keycode> pressedKeys_;
     
     // Handle specific events
-    void handleKeyPress(KeySym keySym);
-    void handleKeyRelease(KeySym keySym);
+    void handleKeyPress(SDL_Keycode keycode);
+    void handleKeyRelease(SDL_Keycode keycode);
     void handleMouseClick(int x, int y);
     void handleMouseRelease(int x, int y);
 };

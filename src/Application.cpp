@@ -4,7 +4,7 @@
 #include <chrono>
 
 PianoApplication::PianoApplication(int windowWidth, int windowHeight)
-    : windowWidth_(windowWidth), windowHeight_(windowHeight), display_(nullptr) {
+    : windowWidth_(windowWidth), windowHeight_(windowHeight) {
 }
 
 PianoApplication::~PianoApplication() {
@@ -13,13 +13,6 @@ PianoApplication::~PianoApplication() {
 
 bool PianoApplication::initialize() {
     try {
-        // Initialize display
-        display_ = XOpenDisplay(nullptr);
-        if (!display_) {
-            std::cerr << "Failed to open X11 display" << std::endl;
-            return false;
-        }
-        
         // Create components
         piano_ = std::make_unique<Piano>();
         renderer_ = std::make_unique<UIRenderer>(windowWidth_, windowHeight_, "Professional Piano - C++");
@@ -73,23 +66,22 @@ void PianoApplication::run() {
 }
 
 void PianoApplication::handleEvents() {
-    Display* display = renderer_->getDisplay();
-    Window window = renderer_->getWindow();
-    
-    XEvent event;
-    while (XPending(display) > 0) {
-        XNextEvent(display, &event);
-        
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
         switch (event.type) {
-            case 2: { // KeyPress
-                KeySym keySym = XLookupKeysym(&event.xkey, 0);
+            case SDL_QUIT:
+                isRunning_ = false;
+                return;
+            
+            case SDL_KEYDOWN: {
+                SDL_Keycode keyCode = event.key.keysym.sym;
                 
                 // Handle special global commands
-                if (keySym == XK_q || keySym == XK_Q || keySym == XK_Escape) {
+                if (keyCode == SDLK_q || keyCode == SDLK_ESCAPE) {
                     isRunning_ = false;
                     return;
                 }
-                if (keySym == XK_r || keySym == XK_R) {
+                if (keyCode == SDLK_r) {
                     if (!recorder_->isRecording()) {
                         recorder_->startRecording();
                         statusMessage_ = "Recording started...";
@@ -101,7 +93,7 @@ void PianoApplication::handleEvents() {
                     }
                     return;
                 }
-                if (keySym == XK_p || keySym == XK_P) {
+                if (keyCode == SDLK_p) {
                     if (!recorder_->isPlaying() && !recorder_->getRecordedEvents().empty()) {
                         recorder_->startPlayback();
                         statusMessage_ = "Playing back recording...";
@@ -112,11 +104,11 @@ void PianoApplication::handleEvents() {
                     }
                     return;
                 }
-                if (keySym == XK_h || keySym == XK_H) {
+                if (keyCode == SDLK_h) {
                     showHelp_ = !showHelp_;
                     return;
                 }
-                if (keySym == XK_c || keySym == XK_C) {
+                if (keyCode == SDLK_c) {
                     piano_->releaseAllKeys();
                     recorder_->clearRecording();
                     statusMessage_ = "Cleared";
@@ -124,33 +116,32 @@ void PianoApplication::handleEvents() {
                 }
                 
                 // Pass to input handler for note playing
-                inputHandler_->handleXEvent(event);
+                inputHandler_->handleSDLEvent(event);
                 
                 // Record if recording
                 if (recorder_->isRecording()) {
-                    KeySym sym = XLookupKeysym(&event.xkey, 0);
-                    Note::NoteName note = inputHandler_->getKeyNote(sym);
-                    int octave = inputHandler_->getKeyOctave(sym);
+                    Note::NoteName note = inputHandler_->getKeyNote(keyCode);
+                    int octave = inputHandler_->getKeyOctave(keyCode);
                     recorder_->recordNoteOn(note, octave);
                 }
                 break;
             }
             
-            case 3: { // KeyRelease
-                inputHandler_->handleXEvent(event);
+            case SDL_KEYUP: {
+                inputHandler_->handleSDLEvent(event);
                 
                 if (recorder_->isRecording()) {
-                    KeySym sym = XLookupKeysym(&event.xkey, 0);
-                    Note::NoteName note = inputHandler_->getKeyNote(sym);
-                    int octave = inputHandler_->getKeyOctave(sym);
+                    SDL_Keycode keyCode = event.key.keysym.sym;
+                    Note::NoteName note = inputHandler_->getKeyNote(keyCode);
+                    int octave = inputHandler_->getKeyOctave(keyCode);
                     recorder_->recordNoteOff(note, octave);
                 }
                 break;
             }
             
-            case ButtonPress: {
+            case SDL_MOUSEBUTTONDOWN: {
                 // Handle mouse click on keys
-                PianoKey* key = renderer_->getKeyAt(event.xbutton.x, event.xbutton.y, *piano_);
+                PianoKey* key = renderer_->getKeyAt(event.button.x, event.button.y, *piano_);
                 if (key) {
                     piano_->pressKey(key->getNote().getName(), key->getNote().getOctave());
                     if (recorder_->isRecording()) {
@@ -160,27 +151,15 @@ void PianoApplication::handleEvents() {
                 break;
             }
             
-            case ButtonRelease: {
+            case SDL_MOUSEBUTTONUP: {
                 // Handle mouse release
-                PianoKey* key = renderer_->getKeyAt(event.xbutton.x, event.xbutton.y, *piano_);
+                PianoKey* key = renderer_->getKeyAt(event.button.x, event.button.y, *piano_);
                 if (key) {
                     piano_->releaseKey(key->getNote().getName(), key->getNote().getOctave());
                     if (recorder_->isRecording()) {
                         recorder_->recordNoteOff(key->getNote().getName(), key->getNote().getOctave());
                     }
                 }
-                break;
-            }
-            
-            case ClientMessage: {
-                // Window close button
-                isRunning_ = false;
-                break;
-            }
-            
-            case Expose: {
-                // Window needs redraw
-                render();
                 break;
             }
             
@@ -226,9 +205,4 @@ void PianoApplication::shutdown() {
     recorder_.reset();
     audioEngine_.reset();
     renderer_.reset();
-    
-    if (display_) {
-        XCloseDisplay(display_);
-        display_ = nullptr;
-    }
 }

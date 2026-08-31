@@ -6,11 +6,10 @@
 #include "AudioEngine.h"
 #include "UIRenderer.h"
 #include <memory>
-#include <X11/Xlib.h>
 
 /**
  * @class PianoApplication
- * @brief Main application class coordinating all components
+ * @brief Main application class coordinating all components (cross-platform with SDL2)
  */
 class PianoApplication {
 public:
@@ -54,9 +53,6 @@ private:
     bool isRunning_ = false;
     int windowWidth_;
     int windowHeight_;
-    
-    // Display
-    Display* display_;
     
     // Main loop
     void update();

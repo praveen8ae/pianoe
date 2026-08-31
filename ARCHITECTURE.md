@@ -9,10 +9,10 @@ The Piano application follows a modular, event-driven architecture designed for 
 ### 1. **Separation of Concerns**
 Each component has a single responsibility:
 - **Piano**: Music logic and note management
-- **InputHandler**: Event translation from X11 to musical notes
+- **InputHandler**: Event translation from SDL2 to musical notes
 - **Recorder**: Recording/playback sequencing
 - **AudioEngine**: Sound synthesis abstraction
-- **UIRenderer**: Graphics rendering
+- **UIRenderer**: Graphics rendering (cross-platform with SDL2)
 - **PianoApplication**: Coordination and orchestration
 
 ### 2. **Dependency Injection**
@@ -43,6 +43,14 @@ std::unique_ptr<Piano> piano_;
 std::unique_ptr<Recorder> recorder_;
 ```
 
+### 5. **Cross-Platform Design**
+The UI renderer abstracts SDL2, allowing the same codebase to work on Windows, Linux, and macOS:
+
+```cpp
+// SDL2 handles platform differences automatically
+renderer_->renderPiano(piano);  // Works on all platforms
+```
+
 ## Component Deep Dive
 
 ### Piano Engine
@@ -68,24 +76,30 @@ where F₀ = 440Hz (A4), using equal temperament
 
 ### Input Handler
 
-**Responsibility**: Translate X11 events to musical note events
+**Responsibility**: Translate SDL2 events to musical note events (cross-platform)
 
 **Event Flow**:
 ```
-X11 Event → handleXEvent() → KeySym mapping → Piano::pressKey()/releaseKey()
+SDL2 Event (Windows/Linux/macOS) → handleSDLEvent() → SDL_Keycode mapping → Piano::pressKey()/releaseKey()
 ```
 
 **Key Features**:
-- Keyboard-to-note mapping (customizable)
+- Keyboard-to-note mapping (customizable, works on all platforms)
 - Key repeat detection
 - Mouse-to-piano translation
 - Event callback system for extensibility
+- Consistent behavior across Windows 11, Linux, and macOS
 
 **Keyboard Mapping Example**:
 ```cpp
-mapKeyToNote(XK_a, Note::NoteName::C, 4);  // 'A' plays C4
-mapKeyToNote(XK_w, Note::NoteName::CSharp, 4);  // 'W' plays C#4
+mapKeyToNote(SDLK_a, Note::NoteName::C, 4);  // 'A' plays C4
+mapKeyToNote(SDLK_w, Note::NoteName::CSharp, 4);  // 'W' plays C#4
 ```
+
+**Platform Independence**:
+- Uses SDL_Keycode instead of X11 KeySym
+- SDL2 handles keyboard layout differences across platforms
+- Works on QWERTY, AZERTY, Dvorak, etc. seamlessly
 
 ### Recorder
 
@@ -176,7 +190,13 @@ audioEngine_->initialize(std::make_unique<MyCustomSynthesizer>());
 
 ### UI Renderer
 
-**Responsibility**: Render piano keys and status information using X11
+**Responsibility**: Render piano keys and status information using SDL2 (cross-platform)
+
+**Cross-Platform Support**:
+- Runs on Windows 11, Linux, and macOS
+- Single codebase for all platforms
+- SDL2 abstracts platform-specific graphics details
+- Hardware acceleration when available
 
 **Rendering Pipeline**:
 1. `clear()` - Clear window
@@ -185,16 +205,29 @@ audioEngine_->initialize(std::make_unique<MyCustomSynthesizer>());
 4. `flush()` - Update display
 
 **Key Drawing**:
-- White keys: RGBcolor(255, 255, 255)
+- White keys: RGB(255, 255, 255)
 - Black keys: RGB(0, 0, 0)
 - Pressed keys: Different shade to show state
-- Labels: Note names on white keys
+- Labels: Note names on white keys (with SDL_ttf for future enhancement)
 
 **Coordinate System**:
 - Origin at top-left
 - X increases rightward
 - Y increases downward
 - Keys positioned during `piano_->layoutKeys(width, height)`
+
+**SDL2 Rendering**:
+```cpp
+// Platform-independent rendering
+SDL_SetRenderDrawColor(renderer_, 255, 255, 255, 255);  // Set color
+SDL_RenderFillRect(renderer_, &rect);                    // Draw rectangle
+SDL_RenderPresent(renderer_);                            // Update display
+```
+
+**Text Rendering Note**:
+- Current implementation omits text rendering
+- Can be enhanced with SDL_ttf library for cross-platform text
+- Would allow rendering status messages, note labels, etc.
 
 ### Application Coordinator
 
