@@ -1,37 +1,39 @@
-CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2
-TARGET = piano
-PYTHON = python3
+.PHONY: all build run clean help install
 
-.PHONY: all run clean gui-run gui-server help
+# Default build type
+BUILD_TYPE ?= Release
 
 help:
-	@echo "🎹 Piano Makefile Targets:"
+	@echo "🎹 Piano Application - Makefile Targets"
 	@echo ""
-	@echo "  make gui-run      - Start the GUI piano (requires browser)"
-	@echo "  make gui-server   - Start GUI server on localhost:8000"
-	@echo "  make run          - Run console piano demo"
-	@echo "  make all          - Build console piano binary"
-	@echo "  make clean        - Remove built files"
+	@echo "  make build        - Build the piano application"
+	@echo "  make run          - Build and run"
+	@echo "  make install      - Install to system (requires sudo for /usr/bin)"
+	@echo "  make clean        - Remove build directory"
+	@echo "  make help         - Show this help message"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make                  # Build with Release optimization"
+	@echo "  make BUILD_TYPE=Debug # Build with debug symbols"
+	@echo "  make run              # Build and immediately run"
 	@echo ""
 
-all: $(TARGET)
+all: build
 
-$(TARGET): main.cpp
-	$(CXX) $(CXXFLAGS) -o $(TARGET) main.cpp
+build:
+	@mkdir -p build
+	@cd build && cmake -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) .. && make
+	@echo "✓ Build complete: ./build/piano"
 
-run: $(TARGET)
-	./$(TARGET)
+run: build
+	@./build/piano
 
-gui-run:
-	@echo "🎹 Opening Interactive Piano..."
-	@$(PYTHON) run_piano.py
-
-gui-server:
-	@echo "🎹 Starting Piano GUI Server at http://localhost:8000"
-	@cd $(dir $(abspath $(firstword $(MAKEFILE_LIST)))) && $(PYTHON) -m http.server 8000
+install: build
+	@cd build && make install
+	@echo "✓ Installed to system"
 
 clean:
-	rm -f $(TARGET) *.wav
+	@rm -rf build
+	@echo "✓ Cleaned"
 
-.PHONY: all run clean gui-run gui-server help
+.PHONY: all build run clean help install
